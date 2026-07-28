@@ -136,6 +136,33 @@ Un solo `.exe` es más cómodo de mandar, pero descomprime ~200 MB (matplotlib, 
 - **Windows muestra una alerta de SmartScreen** la primera vez, porque el `.exe` no está firmado: "Más información" → "Ejecutar de todas formas". Firmarlo requiere un certificado pago.
 - **Respaldo aparte**: la app copia `panaderia.db` a `backups/` en cada arranque (30 últimas). Eso protege contra un archivo dañado o borrado sin querer, **no** contra que se rompa la computadora — para eso hay que copiar `Datos\` a un USB o a la nube cada tanto. Ajustes tiene un botón "Abrir carpeta de datos" justamente para eso.
 
+### Publicar una versión nueva (GitHub)
+
+El repositorio es **público**: <https://github.com/AlanAl3x/fermento>. El código se versiona ahí y el ZIP se distribuye por **Releases**, no por el repo — GitHub rechaza archivos de más de 100 MB y desaconseja los de más de 50, y un binario de 41 MB por versión inflaría el historial para siempre. Por eso `dist/` está en `.gitignore`.
+
+Para sacar una versión nueva, en este orden:
+
+```bash
+# 1. Subir el número de versión (fuente única: lo leen el ZIP y la pantalla de Ajustes)
+#    editar version.py
+
+# 2. Si cambió algo que se vea en pantalla, regenerar el manual
+python generar_manual.py
+
+# 3. Armar el paquete
+python empaquetar.py
+
+# 4. Subir el código
+git add -A && git commit -m "..." && git push
+
+# 5. Publicar la release con el ZIP adjunto
+gh release create v1.1.0 dist/Fermento-v1.1.0.zip --title "Fermento v1.1.0" --notes-file notas.md
+```
+
+El enlace **<https://github.com/AlanAl3x/fermento/releases/latest>** siempre apunta a la más reciente: es el que se le manda a la panadería y no cambia entre versiones. Verificado que la descarga funciona **sin iniciar sesión** (HTTP 200 anónimo) — eso solo es cierto porque el repo es público; en uno privado los assets de release exigen autenticación.
+
+**Qué no puede subirse nunca**, ya cubierto por `.gitignore` pero conviene tenerlo presente al agregar archivos: `panaderia.db`, `backups/`, `tickets/`, `panaderia_error.log` y cualquier carpeta `Datos/`. Son las ventas reales del negocio, y una vez en GitHub quedan en el historial aunque se borren después — sacarlas obliga a reescribir la historia del repo. El repo se creó el 2026-07-27, con la base ya vacía, justamente para que no hubiera nada real que filtrar.
+
 ### El manual para la panadería
 
 `Fermento - Manual de instalacion y uso.docx` (11 páginas) es el único documento del proyecto escrito **para el usuario final**, no para quien programa. Cinco partes: instalar, actualizar, dónde están los datos, qué hace cada pantalla, y qué hacer si algo falla. Sin tecnicismos y con los pasos de Windows escritos uno por uno ("clic derecho → Extraer todo…").

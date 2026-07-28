@@ -5,6 +5,7 @@ App de escritorio (customtkinter + SQLite) para gestionar ventas de una panader�
 ## Stack y comandos
 - Python 3.x, customtkinter (modo oscuro fijo), Pillow (branding), matplotlib (gráficos, embebido con `FigureCanvasTkAgg`), reportlab (ticket de venta en PDF), SQLite (`panaderia.db`, se crea sola en el primer uso; se respalda sola en `backups/` en cada arranque).
 - Correr: `pip install -r requirements.txt && python main.py`
+- Repo **público**: <https://github.com/AlanAl3x/fermento>. El código va al repo; el ZIP se distribuye por **Releases** (`dist/` está en `.gitignore`). Publicar una versión: subir `version.py` → `generar_manual.py` si cambió algo visible → `empaquetar.py` → push → `gh release create vX.Y.Z dist/Fermento-vX.Y.Z.zip`. Pasos completos en `DOCUMENTACION.md`. **Nunca commitear `panaderia.db`, `backups/`, `tickets/` ni el log** — son las ventas reales y en un repo público quedan en el historial para siempre.
 - Empaquetar: `python empaquetar.py` — deja en `dist/` el ZIP listo para mandar a la panadería. **No llamar a `pyinstaller` a mano**: el script regenera el ícono, pasa `--collect-data customtkinter` (sin eso el .exe abre y revienta) y arma la estructura de carpetas de la que depende que actualizar no borre los datos. Subir `version.py` antes de empaquetar.
 
 ## Estructura
