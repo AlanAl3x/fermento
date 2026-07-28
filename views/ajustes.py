@@ -15,6 +15,7 @@ import os
 import customtkinter as ctk
 from tkinter import messagebox
 
+import actualizaciones
 import database as db
 from version import VERSION
 from views import theme
@@ -104,11 +105,52 @@ class AjustesFrame(ctk.CTkFrame):
                      font=ctk.CTkFont(size=12), wraplength=620, justify="left",
                      anchor="w").pack(anchor="w", padx=16, pady=(0, 10))
 
-        ctk.CTkButton(card, text="Abrir carpeta de datos", width=190,
+        fila = ctk.CTkFrame(card, fg_color="transparent")
+        fila.pack(anchor="w", padx=16, pady=(0, 16))
+
+        ctk.CTkButton(fila, text="Abrir carpeta de datos", width=190,
                       fg_color=theme.NAV_INACTIVE, hover_color=theme.NAV_INACTIVE_HOVER,
                       text_color=theme.TEXT_PRIMARY,
-                      command=self._abrir_carpeta_datos).pack(
-            anchor="w", padx=16, pady=(0, 16))
+                      command=self._abrir_carpeta_datos).pack(side="left")
+
+        self._btn_buscar = ctk.CTkButton(
+            fila, text="Buscar actualizaciones", width=190,
+            fg_color=theme.NAV_INACTIVE, hover_color=theme.NAV_INACTIVE_HOVER,
+            text_color=theme.TEXT_PRIMARY, command=self._buscar_actualizacion)
+        self._btn_buscar.pack(side="left", padx=(10, 0))
+
+    def _buscar_actualizacion(self):
+        """A diferencia del chequeo del arranque, este **contesta siempre**.
+
+        El botón se deshabilita mientras consulta: sin eso, apretarlo tres
+        veces dispara tres hilos y tres diálogos encimados. Se vuelve a
+        habilitar en el callback, que ya corre en el hilo de Tk.
+        """
+        self._btn_buscar.configure(state="disabled", text="Buscando…")
+        actualizaciones.buscar_ahora(self.winfo_toplevel(), self._resultado_busqueda)
+
+    def _resultado_busqueda(self, estado, etiqueta):
+        self._btn_buscar.configure(state="normal", text="Buscar actualizaciones")
+        if estado == actualizaciones.NUEVA:
+            if messagebox.askyesno(
+                    "Hay una versión nueva",
+                    f"Tenés la versión {VERSION} y ya salió la {etiqueta.lstrip('v')}.\n\n"
+                    "Actualizar no borra ninguna venta.\n\n"
+                    "¿Abrir la página de descarga?", parent=self):
+                if not actualizaciones.abrir_pagina():
+                    messagebox.showinfo("No se pudo abrir el navegador",
+                                        f"Entrá a mano a:\n\n{actualizaciones.URL_DESCARGA}",
+                                        parent=self)
+        elif estado == actualizaciones.AL_DIA:
+            messagebox.showinfo("Todo al día",
+                                f"Tenés instalada la última versión ({VERSION}).",
+                                parent=self)
+        else:
+            messagebox.showinfo(
+                "No se pudo consultar",
+                "No hay conexión a internet, o GitHub no respondió.\n\n"
+                "No es un problema de la aplicación: se puede seguir vendiendo "
+                "normalmente.", parent=self)
 
     def _abrir_carpeta_datos(self):
         # `os.startfile` es solo de Windows, que es la única plataforma donde

@@ -342,9 +342,19 @@ salto()
 # ═══════════════════════════════════════════════════════════════════════════
 doc.add_heading("Parte 2. Cómo actualizar a una versión nueva", level=1)
 
-p("Cuando se le hagan mejoras al programa vas a recibir otro archivo ZIP, "
-  "igual que el primero pero con un número más alto. Actualizar son tres pasos:",
-  espacio=10)
+p("Cuando se le hagan mejoras al programa va a salir una versión nueva. "
+  "Actualizar son tres pasos:", espacio=10)
+
+caja("La aplicación te avisa sola",
+     ["Cuando hay una versión nueva, abajo a la izquierda (arriba del botón de "
+      "Ajustes) aparece un letrero dorado que dice “↑ Versión … lista”.",
+      "Haz clic ahí y te ofrece abrir la página de descarga. Bajas el ZIP nuevo "
+      "y sigues los tres pasos de abajo.",
+      "Si no aparece nada, es que ya tienes la última. También puedes revisarlo "
+      "cuando quieras en Ajustes → Buscar actualizaciones.",
+      "Para esto la computadora necesita internet. Si no tiene, la aplicación "
+      "funciona igual, nada más que no avisa."],
+     fill="EAF3EA", barra="4C8C4A")
 
 doc.add_heading("Paso 1. Cierra la aplicación", level=3)
 p("Si está abierta, ciérrala con la X. Asegúrate de que no quede abierta en la "
@@ -572,6 +582,8 @@ vineta("El descuento se aplica solo, al momento de vender, según la fecha de la
        "No tienes que cambiarle el precio a nada a mano.")
 vineta("Abajo se muestra la versión instalada y la carpeta donde están tus ventas, "
        "con un botón para abrirla.")
+vineta("El botón “Buscar actualizaciones” revisa si salió una versión nueva y te "
+       "dice en qué estás: al día, hay una nueva, o no hay internet en este momento.")
 
 caja("Cómo funciona el descuento en la práctica",
      ["Una concha cuesta $16. Si tienes la regla “a los 2 días, 25 % menos”, la concha "

@@ -1,9 +1,11 @@
 import sys
 from tkinter import messagebox
 
+import actualizaciones
 import customtkinter as ctk
 import database as db
 import registro
+import version
 from views import branding, theme
 from views.productos import ProductosFrame
 from views.inventario import InventarioFrame
@@ -47,6 +49,8 @@ class App(ctk.CTk):
         nav = ctk.CTkFrame(self, width=170, corner_radius=0, fg_color=theme.BG_SIDEBAR)
         nav.pack(side="left", fill="y")
         nav.pack_propagate(False)
+        self._nav = nav  # lo necesita el aviso de versión nueva, que llega después
+        self._btn_version = None
 
         # Marca de agua: el emblema de fondo, detrás de todo lo demás en la
         # barra lateral. Se crea primero para quedar debajo en el orden de
@@ -145,6 +149,11 @@ class App(ctk.CTk):
         # por semana. Abrir en Productos costaba un click en cada venta.
         self._mostrar("nueva_venta")
 
+        # Lo último de todo, y en un hilo aparte: la ventana ya está armada y
+        # usable antes de que esto siquiera intente salir a internet. Si no
+        # hay conexión no pasa nada -- ver `actualizaciones.py`.
+        actualizaciones.buscar_en_segundo_plano(self, self._avisar_version_nueva)
+
     @staticmethod
     def _nav_rotulo(nav, texto, primero=False):
         """Rótulo de un bloque de la barra lateral.
@@ -156,6 +165,46 @@ class App(ctk.CTk):
         ctk.CTkLabel(nav, text=texto, text_color=theme.TEXT_DISABLED,
                      font=ctk.CTkFont(size=10, weight="bold"), anchor="w").pack(
             fill="x", padx=20, pady=(0 if primero else 14, 3))
+
+    def _avisar_version_nueva(self, etiqueta):
+        """Un botón discreto al pie de la barra lateral, no un modal.
+
+        Corre en el hilo de Tk (`actualizaciones` se encarga del puente). El
+        aviso NO interrumpe: aparece arriba de "⚙ Ajustes", en dorado, y
+        espera. Un `messagebox` al arrancar frenaría la primera venta del día
+        por algo que puede resolverse cuando cierren -- y va en contra del
+        criterio de toda la app, que sacó los modales del flujo de venta.
+
+        Se dibuja una sola vez: si por lo que sea llegaran dos avisos, el
+        segundo no apila otro botón.
+        """
+        if self._btn_version:
+            return
+        self._btn_version = ctk.CTkButton(
+            # lstrip("v") porque el tag viene como "v1.1.0" y en pantalla
+            # "Versión v1.1.0" se lee mal.
+            self._nav, text=f"↑  Versión {etiqueta.lstrip('v')} lista", width=140,
+            fg_color="transparent", hover_color=theme.NAV_INACTIVE_HOVER,
+            text_color=theme.ACCENT, font=ctk.CTkFont(size=11),
+            command=lambda: self._detalle_version_nueva(etiqueta))
+        # side="bottom" apila hacia arriba, y "⚙ Ajustes" ya está packeado,
+        # así que este queda justo encima y Ajustes sigue al fondo.
+        self._btn_version.pack(side="bottom", pady=(0, 2), padx=14)
+
+    def _detalle_version_nueva(self, etiqueta):
+        """Acá sí va un diálogo: lo pidió el usuario al tocar el aviso."""
+        abrir = messagebox.askyesno(
+            "Hay una versión nueva",
+            f"Tenés instalada la versión {version.VERSION} y ya salió la "
+            f"{etiqueta.lstrip('v')}.\n\n"
+            "Actualizar no borra ninguna venta: el historial vive en la carpeta "
+            "Datos, que no se toca.\n\n"
+            "¿Abrir la página de descarga en el navegador?",
+            parent=self)
+        if abrir and not actualizaciones.abrir_pagina():
+            messagebox.showinfo(
+                "No se pudo abrir el navegador",
+                f"Entrá a mano a:\n\n{actualizaciones.URL_DESCARGA}", parent=self)
 
     def _on_nav_resize(self, event):
         # <Configure> se dispara muchas veces seguidas mientras se arrastra

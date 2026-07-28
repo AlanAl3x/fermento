@@ -272,6 +272,16 @@ completa el 2026-07-21; detalle y criterio en `CLAUDE.md`)
 
 ## Historial de cambios
 
+### 2026-07-28 — La app avisa sola cuando hay una versión nueva
+- **El problema**: con las versiones publicándose en GitHub, seguía sin haber forma de que la panadería se enterara. Un `.exe` viejo funciona igual de bien que uno nuevo, así que una actualización pendiente no da ninguna señal — había que avisar por teléfono.
+- **Qué hace ahora**: al abrir, la app consulta la última release publicada. Si hay una posterior a la instalada, aparece un botón dorado al pie de la barra lateral: *"↑ Versión 1.2.0 lista"*. Al tocarlo, explica qué pasa y ofrece abrir la página de descarga.
+- **No interrumpe.** El aviso es un botón, no un `messagebox` al arrancar: frenar la primera venta del día con un modal por algo que se resuelve cuando cierren va en contra del criterio con el que se sacaron los modales del flujo de venta. Al tocarlo sí aparece un diálogo, porque ahí lo pidió el usuario.
+- **La app sigue funcionando sin internet, igual de rápido.** Es la primera vez que toca la red, así que la consulta va en un hilo aparte con timeout de 6 segundos, lanzada recién cuando la ventana ya está armada. Medido con un dominio inexistente: falla en **0,06 s** y no muestra nada. Tampoco lo anota en el log — quedarse sin internet no es un error de la aplicación, y llenar el log de eso taparía lo que sí importa.
+- **Botón "Buscar actualizaciones" en Ajustes**, que a diferencia del chequeo automático **contesta siempre**: "estás al día", "hay una versión nueva" o "no hay conexión". Ahí el silencio sería un error, porque el usuario apretó un botón esperando una respuesta. Se deshabilita mientras consulta, para que tres clics no disparen tres diálogos encimados.
+- **El diálogo aclara que actualizar no borra ventas.** Es exactamente la duda que frena a alguien de actualizar, y decirlo en el momento en que decide es más útil que tenerlo solo en el manual.
+- **Sin dependencias nuevas**: `urllib` viene con Python, mismo criterio que descartó `tkcalendar` y `pytest`.
+- **14 pruebas nuevas** (`test_actualizaciones.py`), sobre la comparación de versiones y sin tocar la red. Existen por un error puntual: comparar versiones como texto hace que `"1.10.0" < "1.9.0"`, o sea que funcionaría perfecto durante nueve versiones y después dejaría de avisar para siempre, en silencio y en la máquina de otro. Se comparan como tuplas de enteros.
+
 ### 2026-07-26 — Instalable y actualizable: programa y datos en carpetas separadas
 - **El pedido**: instalar la app en la computadora de la panadería (i5-6500T, 8 GB, Windows 64 bits, sin Python) y poder mandarle actualizaciones después **sin que se borre la base de datos**.
 - **Lo que había**: `--onefile` y la base al lado del `.exe`, todo en una carpeta. Reemplazar el ejecutable ya respetaba los datos, pero la protección dependía de que quien actualiza no se equivocara nunca: alcanzaba con descomprimir "la carpeta nueva" encima para pisar el historial de ventas con una base vacía. Ese error no se deshace.
