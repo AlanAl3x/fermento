@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────────
+# DATOS DE LA PANADERÍA — nunca al repositorio
+# ─────────────────────────────────────────────────────────────────────
+# Son las ventas reales del negocio. No son código, no tiene sentido
+# versionarlas, y una vez subidas a GitHub quedan en el historial aunque
+# se borren después: sacarlas obliga a reescribir la historia del repo.
+panaderia.db
+panaderia.db-journal
+panaderia.db-wal
+panaderia.db-shm
+backups/
+tickets/
+panaderia_error.log
+panaderia_error.log.*
+
+# La carpeta de datos de una instalación, si alguien prueba el .exe acá.
+Datos/
+
+# ─────────────────────────────────────────────────────────────────────
+# GENERADOS — se rehacen con un comando, no se versionan
+# ─────────────────────────────────────────────────────────────────────
+# dist/ trae el ZIP de 41 MB: GitHub rechaza archivos de más de 100 MB y
+# desaconseja los de más de 50. El paquete se distribuye por Releases,
+# que es justamente lo que existe para binarios, no por el repo.
+build/
+dist/
+*.spec
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ─────────────────────────────────────────────────────────────────────
+# LOCAL DE LA MÁQUINA
+# ─────────────────────────────────────────────────────────────────────
+.claude/settings.local.json
+Thumbs.db
+desktop.ini
+~$*.docx
