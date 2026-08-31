@@ -29,7 +29,17 @@ ICON_PATH = _APP_DIR / "assets" / "fermento.ico"
 
 # Cajas de recorte como fracción (izq, arriba, der, abajo) del logo original.
 _CAJA_WORDMARK = (0.0, 0.0, 1.0, 0.87)    # emblema + "FERMENTO", sin subtítulo
-_CAJA_EMBLEMA = (0.26, 0.0, 0.74, 0.64)   # solo el emblema de trigo
+# El borde de abajo estuvo en 0.64 hasta el 2026-08-31 y **cortaba la base
+# del trigo**: midiendo el JPEG, la tinta del emblema llega hasta el 0.6848
+# del alto, así que se perdían las últimas ~12 filas de píxeles. Se notaba
+# poco en el ícono y en la marca de agua (que va tenue y sangrando por el
+# borde), y saltó a la vista recién en el ticket impreso, donde el emblema
+# va grande y con todo el contraste. El 0.70 es el punto medio seguro: deja
+# el trigo entero y todavía no llega a la palabra "FERMENTO" del logo, cuya
+# tinta arranca en el 0.7237. **Al mover este número, medir primero**: entre
+# 0.6848 y 0.7237 no hay nada, y fuera de esa ventana se corta el dibujo o
+# se cuela una franja de las letras.
+_CAJA_EMBLEMA = (0.26, 0.0, 0.74, 0.70)   # solo el emblema de trigo
 
 
 def _recortar(im, caja):

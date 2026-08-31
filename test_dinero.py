@@ -213,6 +213,49 @@ class Anulacion(_BaseDinero):
         self.assertIsNotNone(fila[2])
 
 
+class PagoDelCliente(_BaseDinero):
+    """`ventas.pago` es con cuánto pagó el cliente, y sale impreso en el
+    ticket como "PAGO CON" / "SU CAMBIO". No entra en ninguna cuenta de
+    caja -- es un dato del papel, y estas pruebas existen justamente para
+    que siga siendo así."""
+
+    def _venta(self, pago=None, precio=100.0, cantidad=2):
+        p = self._producto("Pan", precio, stock=10)
+        return db.registrar_venta(
+            [self._item(p, self._lote(p), cantidad, precio)], pago)
+
+    def test_el_pago_se_guarda_tal_cual(self):
+        venta_id = self._venta(pago=500.0)
+        self.assertAlmostEqual(
+            self._un_valor("SELECT pago FROM ventas WHERE id=?", (venta_id,)),
+            500.0, places=2)
+
+    def test_no_registrar_el_pago_deja_NULL_y_no_un_cero(self):
+        """La diferencia que le da sentido a la columna: NULL es "no se
+        anotó con cuánto pagó" y el ticket omite las dos líneas; un 0 se
+        imprimiría como "SU CAMBIO: $0.00", o sea "pagó justo". Si alguien
+        le pone DEFAULT 0 a la columna, todas las ventas viejas pasarían a
+        decir que el cliente pagó exacto."""
+        venta_id = self._venta()
+        self.assertIsNone(
+            self._un_valor("SELECT pago FROM ventas WHERE id=?", (venta_id,)))
+
+    def test_el_pago_no_toca_el_total_de_la_venta(self):
+        venta_id = self._venta(pago=500.0, precio=100.0, cantidad=2)
+        self.assertAlmostEqual(
+            self._un_valor("SELECT total FROM ventas WHERE id=?", (venta_id,)),
+            200.0, places=2)
+
+    def test_el_corte_suma_lo_vendido_y_no_lo_que_entro_en_la_mano(self):
+        """El corte cuadra contra la mercadería vendida. Sumar `pago`
+        (o el cambio) lo inflaría con plata que volvió al cliente."""
+        self._venta(pago=1000.0, precio=100.0, cantidad=2)
+        corte_id = db.hacer_corte()
+        self.assertAlmostEqual(
+            self._un_valor("SELECT total_ventas FROM cortes WHERE id=?", (corte_id,)),
+            200.0, places=2)
+
+
 class Cortes(_BaseDinero):
 
     def test_el_corte_suma_exactamente_las_ventas_pendientes(self):

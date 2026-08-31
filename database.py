@@ -196,6 +196,17 @@ def init_db():
             c.execute("ALTER TABLE ventas ADD COLUMN anulada INTEGER NOT NULL DEFAULT 0")
             c.execute("ALTER TABLE ventas ADD COLUMN motivo_anulacion TEXT")
             c.execute("ALTER TABLE ventas ADD COLUMN fecha_anulacion TEXT")
+        if "pago" not in columnas:
+            # Con cuánto pagó el cliente, para imprimir "PAGO CON" y "SU
+            # CAMBIO" en el ticket. Es OPCIONAL y por eso admite NULL, sin
+            # DEFAULT 0: NULL = no se registró (el vendedor dejó el campo
+            # vacío, o es una venta anterior a esta columna) y el ticket
+            # omite las dos líneas, mientras que un 0 se imprimiría como
+            # "SU CAMBIO: $0.00", o sea "pagó justo" -- que es un hecho
+            # distinto. Mismo criterio que el costo y el precio de lista:
+            # dato faltante no es cero. No entra en ninguna cuenta de caja
+            # (el corte suma `total`, nunca `pago`): es un dato del papel.
+            c.execute("ALTER TABLE ventas ADD COLUMN pago REAL")
         columnas_insumos = [r[1] for r in c.execute("PRAGMA table_info(insumos)").fetchall()]
         if "stock_minimo" not in columnas_insumos:
             # 0 = sin umbral configurado (no dispara alerta de stock bajo).
@@ -747,12 +758,17 @@ def verificar_stock(items):
 
 
 @_safe
-def registrar_venta(items):
+def registrar_venta(items, pago=None):
     """
     items: lista de dicts con claves producto_id, lote_id, cantidad,
     precio_unitario, subtotal (y opcionalmente "nombre", solo para
     mensajes de error más claros). Descuenta el stock del LOTE
     correspondiente automáticamente y devuelve el id de la venta.
+
+    `pago` es con cuánto pagó el cliente, y es opcional: None significa
+    "no se registró" y el ticket omite las líneas de pago y cambio. No
+    se valida contra el total acá -- eso lo hace la pantalla de venta,
+    que es la que puede avisarle al vendedor a tiempo.
 
     El descuento de stock exige "stock >= cantidad" en el propio UPDATE:
     si dos ventas del mismo lote se disparan casi al mismo tiempo (por
@@ -765,7 +781,8 @@ def registrar_venta(items):
     fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with _conn() as c:
         try:
-            cur = c.execute("INSERT INTO ventas (fecha, total) VALUES (?, ?)", (fecha, total))
+            cur = c.execute("INSERT INTO ventas (fecha, total, pago) VALUES (?, ?, ?)",
+                            (fecha, total, pago))
             venta_id = cur.lastrowid
             for i in items:
                 # Costo interno del producto AL MOMENTO de la venta, congelado

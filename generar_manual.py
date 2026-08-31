@@ -493,9 +493,18 @@ vineta("Lo que se terminó aparece agrupado hasta abajo, bajo el letrero AGOTADO
        "No desaparece, para que puedas avisarle al cliente que ya no hay.")
 vineta("Del lado derecho se va armando el ticket con el total. Cuando terminas, "
        "presionas el botón de registrar la venta.")
+vineta("Al lado del total hay un campo “Paga con”. Escribe ahí con cuánto te paga el "
+       "cliente y al costado te va calculando el cambio mientras escribes. Es "
+       "opcional: si lo dejas vacío, la venta se registra igual y el ticket sale sin "
+       "esa parte. Si el monto no alcanza para el total, te avisa y no deja registrar.")
 vineta("Después de vender aparece un aviso verde con un botón “Ticket”, por si el "
        "cliente lo quiere. Se genera en PDF y se abre solo para imprimirlo. "
-       "Si no lo pide, ignóralo y el aviso se va solo.")
+       "Si no lo pide, ignóralo y el aviso se va solo. Si anotaste el pago, el aviso "
+       "también te repite el cambio, para que lo tengas a la vista al contarlo.")
+vineta("El ticket sale del ancho del rollo de la impresora (8 cm), con el total, el "
+       "pago y el cambio en letra grande. Al imprimirlo desde el visor de PDF, "
+       "asegúrate de que la escala esté en “Tamaño real” o al 100 %: si le pones "
+       "“Ajustar a la página”, algunas impresoras lo achican y queda chiquito.")
 
 # ── Productos ────────────────────────────────────────────────────────────────
 doc.add_heading("Productos", level=2)

@@ -92,18 +92,47 @@ class NuevaVentaFrame(ctk.CTkFrame):
         self._aviso.grid(row=2, column=0, sticky="ew", padx=10, pady=(6, 0))
         self._aviso.grid_remove()
 
-        # Pie: total + botones
+        # Pie: total + con cuánto paga + botones
         pie = ctk.CTkFrame(der, fg_color="transparent")
         pie.grid(row=3, column=0, sticky="ew", padx=10, pady=10)
 
-        self.lbl_total = ctk.CTkLabel(pie, text="Total: $0.00", text_color=theme.TEXT_PRIMARY,
+        fila_total = ctk.CTkFrame(pie, fg_color="transparent")
+        fila_total.pack(fill="x")
+
+        self.lbl_total = ctk.CTkLabel(fila_total, text="Total: $0.00",
+                                      text_color=theme.TEXT_PRIMARY,
                                       font=ctk.CTkFont(size=16, weight="bold"))
         self.lbl_total.pack(side="left")
 
-        ctk.CTkButton(pie, text="Confirmar venta",
+        # "Paga con" es OPCIONAL: si queda vacío la venta se registra igual
+        # y el ticket sale sin las líneas de pago y cambio. Es el mismo
+        # criterio que el resto del flujo de venta -- nada que se pueda
+        # saltear debe frenar la acción más repetida del día. El cambio se
+        # calcula mientras se tipea y NO al confirmar: el vendedor lo
+        # necesita con el billete en la mano, antes de darle a Confirmar.
+        self._pago_var = ctk.StringVar()
+        self._pago_var.trace_add("write", lambda *a: self._actualizar_cambio())
+        # Ancho fijo aunque esté vacío: el label se packea a la derecha del
+        # campo, así que si creciera con el texto correría el campo hacia la
+        # izquierda justo mientras se está tipeando adentro. Reservar el
+        # lugar desde el arranque deja la fila quieta.
+        self.lbl_cambio = ctk.CTkLabel(fila_total, text="", anchor="e", width=160,
+                                       font=ctk.CTkFont(size=14, weight="bold"))
+        self.lbl_cambio.pack(side="right", padx=(10, 0))
+        ctk.CTkEntry(fila_total, textvariable=self._pago_var, width=90,
+                     justify="right", placeholder_text="opcional",
+                     fg_color=theme.BG_INPUT, text_color=theme.TEXT_PRIMARY,
+                     border_color=theme.BORDER).pack(side="right", padx=(6, 0))
+        ctk.CTkLabel(fila_total, text="Paga con:", text_color=theme.TEXT_SECONDARY,
+                     font=ctk.CTkFont(size=12)).pack(side="right", padx=(12, 0))
+
+        fila_botones = ctk.CTkFrame(pie, fg_color="transparent")
+        fila_botones.pack(fill="x", pady=(10, 0))
+
+        ctk.CTkButton(fila_botones, text="Confirmar venta",
                       fg_color=theme.SUCCESS, hover_color=theme.SUCCESS_HOVER,
                       command=self._confirmar).pack(side="right")
-        ctk.CTkButton(pie, text="Limpiar",
+        ctk.CTkButton(fila_botones, text="Limpiar",
                       fg_color=theme.NEUTRAL, hover_color=theme.NEUTRAL_HOVER,
                       command=self._limpiar).pack(side="right", padx=8)
 
@@ -254,7 +283,54 @@ class NuevaVentaFrame(ctk.CTkFrame):
 
     def _limpiar(self):
         self.carrito.clear()
+        self._pago_var.set("")
         self._refrescar_carrito()
+
+    # ── Pago y cambio ─────────────────────────────────────────────────────────
+
+    def _total_carrito(self):
+        return sum(i["precio"] * i["cantidad"] for i in self.carrito.values())
+
+    def _leer_pago(self):
+        """
+        Con cuánto paga el cliente, tal como está escrito en el campo.
+        Devuelve (monto, error): monto None y error None si el campo está
+        vacío (es opcional), o monto None y un texto de error si lo que
+        hay no es un número.
+
+        Se toleran el "$" y la coma decimal ("100,50") porque es lo que
+        sale de tipear rápido en el mostrador. La coma NO se usa como
+        separador de miles a propósito: en un campo de efectivo se
+        escribe "1000", no "1,000", y aceptar las dos lecturas haría que
+        "100,50" fuera ambiguo entre $100.50 y $10,050.
+        """
+        txt = self._pago_var.get().strip().replace("$", "").replace(" ", "")
+        if not txt:
+            return None, None
+        try:
+            return float(txt.replace(",", ".")), None
+        except ValueError:
+            return None, "Monto inválido"
+
+    def _actualizar_cambio(self):
+        monto, error = self._leer_pago()
+        if error:
+            self.lbl_cambio.configure(text=error, text_color=theme.WARNING)
+            return
+        if monto is None:
+            self.lbl_cambio.configure(text="")
+            return
+        cambio = monto - self._total_carrito()
+        if cambio < -0.005:
+            self.lbl_cambio.configure(text=f"Falta ${-cambio:,.2f}", text_color=theme.DANGER)
+        else:
+            # El `max(0.0, ...)` no es paranoia: pagando JUSTO, la resta de
+            # dos float da -0.0 o un residuo negativo minúsculo, y el
+            # formateo lo imprime como "$-0.00" -- se veía así en la
+            # primera versión. Todo lo que caiga en esta rama y no sea
+            # positivo es cambio cero.
+            self.lbl_cambio.configure(text=f"Cambio: ${max(0.0, cambio):,.2f}",
+                                      text_color=theme.ACCENT)
 
     def _refrescar_carrito(self):
         for w in self.panel_carrito.winfo_children():
@@ -265,6 +341,7 @@ class NuevaVentaFrame(ctk.CTkFrame):
                          text="El carrito está vacío.\nUsa '+ Agregar' en los productos.",
                          text_color=theme.TEXT_DISABLED, justify="center").pack(pady=20)
             self.lbl_total.configure(text="Total: $0.00")
+            self._actualizar_cambio()
             return
 
         total = 0.0
@@ -302,6 +379,9 @@ class NuevaVentaFrame(ctk.CTkFrame):
                           command=lambda lid=lote_id: self._quitar(lid)).pack(side="left")
 
         self.lbl_total.configure(text=f"Total: ${total:.2f}")
+        # El cambio depende del total, así que se recalcula con cada
+        # movimiento del carrito y no solo cuando se tipea el pago.
+        self._actualizar_cambio()
 
     # ── Confirmar venta ───────────────────────────────────────────────────────
 
@@ -310,6 +390,19 @@ class NuevaVentaFrame(ctk.CTkFrame):
             messagebox.showwarning("Carrito vacío",
                                    "Agrega al menos un producto antes de confirmar.",
                                    parent=self)
+            return
+
+        # El pago se valida ANTES de tocar la base: registrar la venta y
+        # después avisar que el monto estaba mal dejaría el stock ya
+        # descontado y obligaría a anular.
+        pago, error_pago = self._leer_pago()
+        if error_pago:
+            messagebox.showwarning(
+                "Pago inválido",
+                "Lo escrito en 'Paga con' no es un monto válido.\n\n"
+                "Escribí solo el número (por ejemplo 100 o 100.50), o dejalo "
+                "vacío si no querés que el ticket muestre el cambio.",
+                parent=self)
             return
 
         items = [
@@ -338,27 +431,47 @@ class NuevaVentaFrame(ctk.CTkFrame):
             return
 
         total = sum(i["subtotal"] for i in items)
+        # Pagar con MENOS que el total sí frena la venta, a diferencia de
+        # dejar el campo vacío: no es un dato que falte, es un dato que no
+        # cierra, y el ticket saldría con un cambio negativo. El medio
+        # centavo de tolerancia es por el redondeo de los REAL.
+        if pago is not None and pago < total - 0.005:
+            messagebox.showwarning(
+                "El pago no alcanza",
+                f"El total es ${total:,.2f} y en 'Paga con' dice ${pago:,.2f}.\n\n"
+                "Corregí el monto, o dejá el campo vacío si no querés registrarlo.",
+                parent=self)
+            return
         # Sin diálogo de "¿estás seguro?": el carrito completo y el total
         # están a la vista justo al lado del botón, así que la confirmación
         # no aportaba información nueva -- solo un click más en la acción
         # más frecuente del día. Una venta mal registrada se anula desde
         # Historial y devuelve el stock (ver anular_venta()).
         try:
-            venta_id = db.registrar_venta(items)
+            venta_id = db.registrar_venta(items, pago)
         except db.DBError as e:
             messagebox.showerror("Error de base de datos", str(e), parent=self)
             return
+        # max(0.0, ...) por lo mismo que en _actualizar_cambio(): pagar justo
+        # deja un -0.0 que se imprime como "$-0.00".
+        cambio = None if pago is None else max(0.0, pago - total)
         self.carrito.clear()
+        self._pago_var.set("")
         self._refrescar_carrito()
         self.refresh()
-        self._mostrar_aviso(venta_id, total)
+        self._mostrar_aviso(venta_id, total, cambio)
 
     # ── Aviso post-venta ──────────────────────────────────────────────────────
 
-    def _mostrar_aviso(self, venta_id, total):
+    def _mostrar_aviso(self, venta_id, total, cambio=None):
         # No todos los clientes quieren ticket, así que no se genera solo;
         # queda como botón acá, visible pero sin frenar la venta siguiente.
-        self._aviso_lbl.configure(text=f"✓ Venta #{venta_id} registrada — ${total:.2f}")
+        # El cambio se repite acá porque al confirmar se limpia el carrito
+        # (y con él el "Cambio:" del pie): justo cuando hay que contarlo.
+        texto = f"✓ Venta #{venta_id} registrada — ${total:,.2f}"
+        if cambio is not None:
+            texto += f"  ·  Cambio: ${cambio:,.2f}"
+        self._aviso_lbl.configure(text=texto)
         self._aviso_btn.configure(command=lambda: self._generar_ticket(venta_id))
         self._aviso.grid()
         if self._aviso_job:
