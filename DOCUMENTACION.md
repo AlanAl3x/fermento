@@ -191,6 +191,8 @@ Sobre una instalación limpia en carpeta temporal: descomprimir → abrir (arran
 - No se puede anular una venta que ya fue incluida en un corte cerrado.
 - El nombre y la unidad de un insumo no pueden estar vacíos; el stock y el stock mínimo deben ser números >= 0 (acepta decimales).
 - El costo interno de un producto es opcional, pero si se carga debe ser un número >= 0 (acepta decimales).
+- El N° de item, si se escribe, debe ser un entero mayor a 0; dejarlo vacío es válido y significa “asignalo vos” al dar de alta o “dejalo como está” al editar.
+- Dos productos no pueden compartir el N° de item, ni siquiera con uno de ellos dado de baja (lo impide un índice único en la base, además del aviso de la pantalla).
 
 ## Pendientes / futuras mejoras
 
@@ -271,6 +273,19 @@ completa el 2026-07-21; detalle y criterio en `CLAUDE.md`)
 - [ ] Montos en centavos (INTEGER) en vez de REAL. Se midió y **no hay deriva de float** en la base actual; queda como mejora teórica, no como problema observado. Tocaría todas las columnas de plata de seis tablas más toda la interfaz: no encararlo salvo que aparezca un descuadre real.
 
 ## Historial de cambios
+
+### 2026-09-09 — Número de item para los productos
+
+- **Qué hace**: cada producto tiene ahora un **N° de item**: un número corto, propio, que se ve en la primera columna de Productos, se puede ordenar por él, y sirve para buscar escribiendo el número en vez del nombre. Al dar de alta viene sugerido el siguiente libre, así que quien no lo quiera usar solo aprieta Guardar y sigue.
+- **Es una columna nueva (`productos.codigo`) y NO el `id` de la base, a propósito.** El `id` es la identidad interna: apuntan a él las ventas (`detalle_venta`), las tandas (`lotes`) y las reglas de descuento por producto. Si el número que el usuario edita fuera ese, renumerar un producto reescribiría el historial de ventas. Que sean dos números distintos es el punto: el de adentro no se toca nunca, el de afuera se acomoda a lo que le sirva a la panadería. Hay una prueba dedicada a eso (`test_cambiar_el_numero_no_mueve_ninguna_venta`).
+- **La migración numera el catálogo que ya existía con el propio `id` de cada producto.** Son únicos por definición, así que no puede generar repetidos, y el catálogo queda numerado de entrada en vez de obligar a editar producto por producto para estrenar la columna. Después se cambian a gusto.
+- **Que no haya dos números iguales lo garantiza un índice único en la base, no la validación de la pantalla.** El diálogo valida antes de guardar para poder decir *cuál* producto tiene ese número — incluso si está dado de baja y no se ve en la lista, que es justo el caso en que “ese número está libre” parece obvio y no lo es —, pero chequear y guardar son dos pasos, y la app abierta dos veces sin querer ya se contempla en el resto del sistema. Mismo criterio de siempre: mensaje claro en la UI, garantía en la base.
+- **El índice no puede impedir que la app abra.** Si por lo que sea la base ya tuviera números repetidos, crearlo falla, se registra en el log y se sigue: quedarse sin la restricción es mucho menos grave que una panadería que no puede vender a las 5 de la mañana. Mismo criterio que el backup automático y que la migración de claves foráneas.
+- **El número sugerido es el mayor + 1, y no el primer hueco.** Los huecos aparecen al dar de baja productos; rellenarlos haría que un producto nuevo herede el número de uno viejo, que es exactamente lo que confunde a quien estaba buscando por número. Por lo mismo se cuenta a los productos inactivos: uno dado de baja conserva su número (sigue en el historial y se puede reactivar), así que reciclarlo explotaría en cuanto alguien apriete “Reactivar”.
+- **Buscar el número es por el principio; buscar el nombre, por cualquier parte.** Escribir “10” trae el 10 y el 102, pero no el 210 — en el nombre, en cambio, lo natural es encontrar “cho” dentro de “Concha de chocolate”. Buscar el número como subcadena traería resultados que no espera nadie parado en el mostrador.
+- **Un número repetido avisa con título propio**, “Número de item repetido” y no “Error de base de datos”: no falló nada, falta corregir un dato, y el mensaje dice quién lo está usando. Por dentro es `CodigoEnUso`, que hereda de `DBError` para que cualquier pantalla que ya atrapaba errores de base lo siga cubriendo.
+- Verificado: **8 pruebas nuevas en `test_dinero.py` (48 en total, todas pasan)** — alta automática, número elegido a mano, choque entre dos productos, editar a uno ocupado, guardar sin cambiar el propio número, el número de un producto dado de baja, que no se rellenen huecos, y que renumerar no mueva ninguna venta.
+- **Todavía no sirve para vender**: el buscador de Nueva Venta sigue filtrando solo por nombre. Por ahora el N° de item es un identificador de catálogo.
 
 ### 2026-08-31 — El ticket, rehecho para el rollo de 80 mm
 - **El problema, con evidencia en la mano**: Alan mandó la foto de dos tickets de la misma venta, el nuestro al lado del que imprime el sistema que estaban usando mientras tanto. El nuestro era una miniatura ilegible. La causa no era el tamaño de la letra: el PDF se armaba en **hoja A4** con una columna de 120 mm centrada, y al mandarlo a la impresora de rollo el visor achicaba la página entera para que entrara. Todo se reducía en la misma proporción, así que **agrandar las fuentes dentro del A4 no habría cambiado nada**. Lo que cambió es el **tamaño de página**: ahora el PDF mide exactamente el ancho del rollo y no hay nada que escalar.

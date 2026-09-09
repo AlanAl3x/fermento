@@ -32,15 +32,15 @@ class ProductosFrame(ctk.CTkFrame):
         # producto", que se usa muchísimo más seguido.
 
         # Búsqueda: filtra la lista en vivo por nombre (sin distinguir
-        # mayúsculas/minúsculas) a medida que se escribe, sin ir a la BD --
-        # el catálogo de una panadería es chico, no hace falta una consulta
-        # nueva por cada letra tipeada.
+        # mayúsculas/minúsculas) o por número de item, a medida que se
+        # escribe y sin ir a la BD -- el catálogo de una panadería es chico,
+        # no hace falta una consulta nueva por cada letra tipeada.
         busqueda = ctk.CTkFrame(self, fg_color="transparent")
         busqueda.pack(fill="x", padx=20, pady=(0, 10))
         self._filtro_var = ctk.StringVar()
         self._filtro_var.trace_add("write", lambda *a: self.refresh())
         ctk.CTkEntry(busqueda, textvariable=self._filtro_var,
-                     placeholder_text="Buscar producto por nombre...",
+                     placeholder_text="Buscar por nombre o N° de item...",
                      width=300, fg_color=theme.BG_INPUT, text_color=theme.TEXT_PRIMARY,
                      border_color=theme.BORDER).pack(side="left")
 
@@ -51,6 +51,17 @@ class ProductosFrame(ctk.CTkFrame):
         # columna activa muestra flecha.
         enc = ctk.CTkFrame(self, fg_color=theme.BG_CARD_HEADER, corner_radius=6)
         enc.pack(fill="x", padx=20, pady=(0, 2))
+
+        # El número de item va primero porque es por donde se busca: la
+        # columna se lee de arriba abajo de un vistazo, cosa que no pasa si
+        # queda perdida entre el precio y el stock. Va antes que "Nombre" en
+        # el orden del pack, si no quedaría a la DERECHA de la columna que
+        # se expande.
+        self._btn_col_codigo = ctk.CTkButton(
+            enc, text="N°", width=56, fg_color="transparent",
+            hover_color=theme.NEUTRAL_HOVER, text_color=theme.TEXT_SECONDARY,
+            font=ctk.CTkFont(weight="bold"), command=lambda: self._click_orden("codigo"))
+        self._btn_col_codigo.pack(side="left", padx=(10, 0), pady=6)
 
         self._btn_col_nombre = ctk.CTkButton(
             enc, text="Nombre", anchor="w", fg_color="transparent",
@@ -112,9 +123,20 @@ class ProductosFrame(ctk.CTkFrame):
 
         filtro = self._filtro_var.get().strip().lower()
         if filtro:
-            productos = [p for p in productos if filtro in p["nombre"].lower()]
+            # El número matchea por PREFIJO y el nombre por contenido, que es
+            # como se usa cada uno: tipear "10" busca la familia 10, 101,
+            # 102… mientras que en el nombre lo natural es encontrar "choco"
+            # dentro de "Concha de chocolate". Buscar el número como
+            # subcadena traería el 210 al escribir "10", que no es lo que
+            # espera nadie parado en el mostrador.
+            productos = [p for p in productos
+                         if filtro in p["nombre"].lower()
+                         or str(p["codigo"] or "").startswith(filtro)]
 
         claves = {
+            # Sin número (solo posible si la migración no llegó a correr):
+            # al final de la lista, no adelante como haría un 0.
+            "codigo": lambda p: p["codigo"] if p["codigo"] is not None else float("inf"),
             "nombre": lambda p: p["nombre"].lower(),
             "precio": lambda p: p["precio"],
             # Sin costo cargado (0) = margen desconocido, no "100% de margen".
@@ -126,6 +148,7 @@ class ProductosFrame(ctk.CTkFrame):
         productos.sort(key=claves[self._orden_col], reverse=not self._orden_asc)
 
         flecha = " ▼" if self._orden_asc else " ▲"
+        self._btn_col_codigo.configure(text="N°" + (flecha if self._orden_col == "codigo" else ""))
         self._btn_col_nombre.configure(text="Nombre" + (flecha if self._orden_col == "nombre" else ""))
         self._btn_col_precio.configure(text="Precio" + (flecha if self._orden_col == "precio" else ""))
         self._btn_col_margen.configure(text="Margen" + (flecha if self._orden_col == "margen" else ""))
@@ -179,6 +202,14 @@ class ProductosFrame(ctk.CTkFrame):
         fila.pack(fill="x", pady=2)
 
         lotes = lotes_todos.get(p["id"], [])
+
+        # Antes que el nombre, igual que en el encabezado. Va en dorado
+        # (TEXT_SECONDARY) y no en blanco para que se lea como una etiqueta
+        # y no compita con el nombre del producto, que sigue siendo lo
+        # primero que se busca con la vista.
+        ctk.CTkLabel(fila, text=str(p["codigo"]) if p["codigo"] is not None else "—",
+                     text_color=theme.TEXT_DISABLED if not p["activo"] else theme.TEXT_SECONDARY,
+                     width=56, anchor="center").pack(side="left", padx=(10, 0), pady=8)
 
         info_nombre = ctk.CTkFrame(fila, fg_color="transparent")
         info_nombre.pack(side="left", expand=True, fill="x", padx=10, pady=8)
@@ -331,8 +362,17 @@ class _DialogoProducto(ctk.CTkToplevel):
         self.e_nombre.focus()
 
     def _build_ui(self):
-        ctk.CTkLabel(self, text="Nombre:", text_color=theme.TEXT_PRIMARY).pack(
+        # El número va primero porque es el identificador, pero el foco
+        # arranca igual en Nombre (ver __init__): al dar de alta viene
+        # sugerido el siguiente libre y lo normal es aceptarlo sin tocarlo.
+        ctk.CTkLabel(self, text="N° de item:", text_color=theme.TEXT_PRIMARY).pack(
             anchor="w", padx=24, pady=(20, 2))
+        self.e_codigo = ctk.CTkEntry(self, width=312, fg_color=theme.BG_INPUT,
+                                     text_color=theme.TEXT_PRIMARY, border_color=theme.BORDER)
+        self.e_codigo.pack(padx=24)
+
+        ctk.CTkLabel(self, text="Nombre:", text_color=theme.TEXT_PRIMARY).pack(
+            anchor="w", padx=24, pady=(12, 2))
         self.e_nombre = ctk.CTkEntry(self, width=312, fg_color=theme.BG_INPUT,
                                      text_color=theme.TEXT_PRIMARY, border_color=theme.BORDER)
         self.e_nombre.pack(padx=24)
@@ -363,6 +403,17 @@ class _DialogoProducto(ctk.CTkToplevel):
             self.e_precio.insert(0, f"{self.producto['precio']:.2f}")
             self.e_costo.delete(0, "end")
             self.e_costo.insert(0, f"{self.producto['costo']:.2f}")
+            if self.producto["codigo"] is not None:
+                self.e_codigo.insert(0, str(self.producto["codigo"]))
+        else:
+            # Sugerencia: el siguiente número libre. Si la consulta falla, el
+            # campo queda vacío y se guarda igual (la base le asigna uno) --
+            # no poder sugerir un número no es motivo para no dar de alta un
+            # producto.
+            try:
+                self.e_codigo.insert(0, str(db.proximo_codigo()))
+            except db.DBError:
+                pass
 
         ctk.CTkButton(self, text="Guardar", fg_color=theme.ACCENT,
                       hover_color=theme.ACCENT_HOVER, text_color=theme.ACCENT_TEXT,
@@ -373,6 +424,21 @@ class _DialogoProducto(ctk.CTkToplevel):
         if not nombre:
             messagebox.showerror("Error", "El nombre no puede estar vacío.", parent=self)
             return
+
+        # Vacío = "asignalo vos" al dar de alta, y "dejalo como está" al
+        # editar. En los dos casos se manda None y lo resuelve la base.
+        texto_codigo = self.e_codigo.get().strip()
+        codigo = None
+        if texto_codigo:
+            try:
+                codigo = int(texto_codigo)
+                if codigo <= 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror(
+                    "Error", "El N° de item debe ser un número entero mayor a 0 "
+                             "(o quedar vacío para que se asigne solo).", parent=self)
+                return
         try:
             # Acepta coma decimal ("12,50") además de punto ("12.50").
             precio = float(self.e_precio.get().strip().replace(",", "."))
@@ -396,7 +462,7 @@ class _DialogoProducto(ctk.CTkToplevel):
 
         try:
             if self.producto:
-                db.update_producto(self.producto["id"], nombre, precio, costo)
+                db.update_producto(self.producto["id"], nombre, precio, costo, codigo)
             else:
                 try:
                     stock = int(self.e_stock.get().strip())
@@ -405,7 +471,12 @@ class _DialogoProducto(ctk.CTkToplevel):
                 except ValueError:
                     messagebox.showerror("Error", "El stock debe ser un entero >= 0.", parent=self)
                     return
-                db.add_producto(nombre, precio, stock, costo)
+                db.add_producto(nombre, precio, stock, costo, codigo)
+        except db.CodigoEnUso as e:
+            # Va ANTES del except de DBError (del que hereda): no falló la
+            # base, hay un dato que corregir, y el título tiene que decir eso.
+            messagebox.showerror("Número de item repetido", str(e), parent=self)
+            return
         except db.DBError as e:
             messagebox.showerror("Error de base de datos", str(e), parent=self)
             return

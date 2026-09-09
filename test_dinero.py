@@ -256,6 +256,108 @@ class PagoDelCliente(_BaseDinero):
             200.0, places=2)
 
 
+class NumeroDeItem(_BaseDinero):
+    """`productos.codigo` es el número que el usuario ve y edita. Estas
+    pruebas cuidan las dos cosas que lo pueden arruinar: que se repita, y
+    que alguien lo confunda con el `id` y termine moviendo ventas ya
+    hechas al renumerar el catálogo."""
+
+    def _codigo(self, producto_id):
+        return self._un_valor("SELECT codigo FROM productos WHERE id=?", (producto_id,))
+
+    def test_al_dar_de_alta_se_asigna_el_siguiente_libre(self):
+        p1 = self._producto("Pan", 10.0)
+        p2 = self._producto("Factura", 20.0)
+        self.assertEqual(self._codigo(p2), self._codigo(p1) + 1)
+
+    def test_se_puede_elegir_el_numero_a_mano(self):
+        db.add_producto("Bolillo", 4.0, 5, 1.0, codigo=777)
+        p = next(x["id"] for x in db.get_productos() if x["nombre"] == "Bolillo")
+        self.assertEqual(self._codigo(p), 777)
+
+    def test_dos_productos_no_pueden_tener_el_mismo_numero(self):
+        db.add_producto("Pan", 10.0, 5, 0, codigo=50)
+        # CodigoEnUso y no DBError a secas: la pantalla lo atrapa aparte para
+        # titular el aviso "Número de item repetido" en vez de "Error de base
+        # de datos", que es lo que vería el mostrador si esto se degradara.
+        with self.assertRaises(db.CodigoEnUso) as caso:
+            db.add_producto("Factura", 20.0, 5, 0, codigo=50)
+        # El mensaje tiene que NOMBRAR al producto que ya usa el número, no
+        # ser el error genérico de SQLite. El índice único de la base también
+        # rechaza el duplicado, así que sin esta aserción se podría borrar la
+        # comprobación de `_verificar_codigo_libre()` sin que ninguna prueba
+        # se queje -- y desde el mostrador se vería un "Detalle técnico:
+        # UNIQUE constraint failed" en vez de "ya lo tiene 'Pan'".
+        self.assertIn("Pan", str(caso.exception))
+        # Y el segundo no quedó a medias en la tabla.
+        self.assertEqual(
+            self._un_valor("SELECT COUNT(*) FROM productos"), 1)
+
+    def test_editar_a_un_numero_ocupado_no_cambia_nada(self):
+        db.add_producto("Pan", 10.0, 5, 0, codigo=10)
+        db.add_producto("Factura", 20.0, 5, 0, codigo=20)
+        p2 = next(x["id"] for x in db.get_productos() if x["nombre"] == "Factura")
+        with self.assertRaises(db.DBError):
+            db.update_producto(p2, "Factura rellena", 25.0, 0, codigo=10)
+        # Ni el número, ni el nombre, ni el precio: la edición entera se cayó.
+        self.assertEqual(self._codigo(p2), 20)
+        self.assertEqual(
+            self._un_valor("SELECT nombre FROM productos WHERE id=?", (p2,)), "Factura")
+
+    def test_guardar_sin_cambiar_el_numero_no_choca_contra_si_mismo(self):
+        """El caso más frecuente de la pantalla: abrir Editar, tocar solo el
+        precio y guardar. El número que viaja es el que el producto ya
+        tenía, así que la comprobación de duplicados tiene que excluirlo a
+        él mismo o editar un producto sería imposible."""
+        db.add_producto("Pan", 10.0, 5, 0, codigo=42)
+        p = next(x["id"] for x in db.get_productos() if x["nombre"] == "Pan")
+        db.update_producto(p, "Pan", 15.0, 0, codigo=42)
+        self.assertEqual(self._codigo(p), 42)
+        self.assertAlmostEqual(
+            self._un_valor("SELECT precio FROM productos WHERE id=?", (p,)), 15.0, places=2)
+
+    def test_el_numero_de_un_producto_dado_de_baja_sigue_ocupado(self):
+        """Un producto inactivo conserva su número porque se puede
+        reactivar. Si el siguiente libre reciclara ese hueco, el choque
+        aparecería recién al apretar 'Reactivar', mucho después."""
+        db.add_producto("Pan", 10.0, 5, 0, codigo=30)
+        p = next(x["id"] for x in db.get_productos() if x["nombre"] == "Pan")
+        db.desactivar_producto(p)
+        with self.assertRaises(db.DBError) as caso:
+            db.add_producto("Otro", 10.0, 5, 0, codigo=30)
+        # El aviso tiene que aclarar que el producto está dado de baja: no
+        # aparece en la lista, así que "ese número está libre" parece obvio.
+        self.assertIn("baja", str(caso.exception))
+        self.assertGreater(db.proximo_codigo(), 30)
+
+    def test_el_siguiente_libre_no_rellena_huecos(self):
+        db.add_producto("Pan", 10.0, 5, 0, codigo=1)
+        db.add_producto("Factura", 20.0, 5, 0, codigo=9)
+        # Con un hueco del 2 al 8, el próximo es 10 y no 2: rellenar haría
+        # que un producto nuevo herede el número de uno viejo.
+        self.assertEqual(db.proximo_codigo(), 10)
+
+    def test_cambiar_el_numero_no_mueve_ninguna_venta(self):
+        """El `codigo` es de cara al usuario; el `id` es la identidad
+        interna a la que apunta `detalle_venta`. Renumerar el catálogo no
+        puede tocar lo ya vendido ni lo ya cortado."""
+        p = self._producto("Pan", 100.0, stock=20)
+        venta_id = db.registrar_venta([self._item(p, self._lote(p), 3, 100.0)])
+        db.update_producto(p, "Pan", 100.0, 40.0, codigo=999)
+        self.assertEqual(self._codigo(p), 999)
+        # La línea sigue apuntando al mismo producto, por id.
+        self.assertEqual(
+            self._un_valor("SELECT producto_id FROM detalle_venta WHERE venta_id=?",
+                           (venta_id,)), p)
+        self.assertAlmostEqual(
+            self._un_valor("SELECT total FROM ventas WHERE id=?", (venta_id,)),
+            300.0, places=2)
+        corte_id = db.hacer_corte()
+        self.assertAlmostEqual(
+            self._un_valor("SELECT total_ventas FROM cortes WHERE id=?", (corte_id,)),
+            300.0, places=2)
+
+
 class Cortes(_BaseDinero):
 
     def test_el_corte_suma_exactamente_las_ventas_pendientes(self):

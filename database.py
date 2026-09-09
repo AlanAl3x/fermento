@@ -16,6 +16,17 @@ class DBError(Exception):
     """Error de base de datos con un mensaje pensado para mostrarse al usuario."""
 
 
+class CodigoEnUso(DBError):
+    """El número de item que se quiso guardar ya lo tiene otro producto.
+
+    Hereda de DBError para que cualquier pantalla que ya atrape DBError lo
+    siga cubriendo sin cambiar nada. Existe aparte solo para que Productos
+    le pueda poner un título honesto: no falló la base, falta corregir un
+    dato, y "Error de base de datos" arriba de un mensaje que dice "poné
+    otro número" asusta de más a quien está atendiendo el mostrador.
+    """
+
+
 # Las claves foráneas se encienden recién cuando `init_db()` confirmó que la
 # estructura las soporta. Encenderlas sobre el esquema viejo sería PEOR que
 # dejarlas apagadas: `eliminar_lote()` pasaría a fallar en cualquier tanda que
@@ -225,6 +236,22 @@ def init_db():
             # margen (precio - costo). 0 = todavía no cargado (no implica
             # margen 100%, la UI lo muestra como "sin datos").
             c.execute("ALTER TABLE productos ADD COLUMN costo REAL NOT NULL DEFAULT 0")
+        if "codigo" not in columnas_productos:
+            # Número de item: el número corto con el que se identifica y se
+            # busca un producto en la pantalla de Productos. Es EDITABLE (lo
+            # elige el usuario) y por eso es una columna propia y no el `id`
+            # -- el id es la identidad interna, la usan `detalle_venta`,
+            # `lotes` y `reglas_descuento_producto`, y dejar que se cambie a
+            # mano rompería todas esas referencias. Que sean dos números
+            # distintos es a propósito: el de adentro no se toca nunca, el de
+            # afuera se acomoda a lo que le sirva a la panadería.
+            c.execute("ALTER TABLE productos ADD COLUMN codigo INTEGER")
+            # Los productos que ya estaban se numeran con su propio id: son
+            # únicos por definición, así que la migración no puede generar
+            # duplicados, y el catálogo queda numerado de entrada en vez de
+            # obligar a editar producto por producto para estrenar la
+            # columna. Después se cambian a gusto desde el diálogo.
+            c.execute("UPDATE productos SET codigo = id WHERE codigo IS NULL")
         # El costo se CONGELA en detalle_venta al momento de la venta, igual
         # criterio que precio_unitario/subtotal: si el costo del producto
         # cambia después, el margen de ventas ya hechas no se altera. 0 =
@@ -276,6 +303,36 @@ def init_db():
     # Va al final y con conexión propia: reconstruye una tabla entera y necesita
     # las claves foráneas APAGADAS, al revés que todo el resto de la app.
     _migrar_borrado_de_tandas()
+    _indice_unico_de_codigo()
+
+
+def _indice_unico_de_codigo():
+    """
+    Índice único sobre `productos.codigo`: la garantía REAL de que dos
+    productos no compartan número de item. El diálogo ya lo valida antes
+    de guardar, pero esa comprobación y el INSERT son dos pasos, y la app
+    abierta dos veces sin querer es un escenario que ya se contempla en
+    otras partes (ver `registrar_venta()`) -- mismo criterio: chequeo en
+    la UI para el mensaje claro, restricción en la base para la garantía.
+
+    Los NULL no se estorban entre sí (en SQLite dos NULL no son iguales
+    para un índice único), así que un producto sin número no bloquea a
+    otro igual de innumerado.
+
+    Va aparte de `init_db()` y **no puede impedir que la app abra**: si
+    por lo que sea la base ya tuviera códigos repetidos, crear el índice
+    falla, y quedarse sin la restricción es mucho menos grave que una
+    panadería que no puede vender a las 5 de la mañana. Se registra y se
+    sigue -- mismo criterio que `respaldar_db()` y la migración de claves
+    foráneas.
+    """
+    try:
+        with _conn() as c:
+            c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_productos_codigo "
+                      "ON productos(codigo)")
+            c.commit()
+    except sqlite3.Error:
+        registro.error("No se pudo crear el índice único de números de item")
 
 
 # Estructura final de detalle_venta. Se escribe entera acá (y no como otro
@@ -401,6 +458,55 @@ def _migrar_borrado_de_tandas():
 
 
 # ── Productos ────────────────────────────────────────────────────────────────
+# `productos.codigo` es el "número de item": el número corto que se ve y se
+# busca en la pantalla de Productos. Lo elige el usuario y se puede cambiar
+# cuando quiera, así que es distinto del `id` -- ese es la identidad interna
+# a la que apuntan `detalle_venta`, `lotes` y `reglas_descuento_producto`, y
+# no se toca nunca.
+
+
+def _proximo_codigo(c):
+    """El siguiente número de item libre, para sugerirlo al dar de alta.
+
+    Se calcula sobre TODOS los productos, incluidos los dados de baja: un
+    producto inactivo conserva su número (sigue en el historial y se puede
+    reactivar), así que reciclarlo chocaría contra el índice único en
+    cuanto alguien apriete "Reactivar".
+
+    Es MAX+1 y no "el primer hueco": los huecos aparecen al dar de baja, y
+    rellenarlos haría que un producto nuevo herede el número de uno viejo
+    -- justo lo que confunde a quien buscaba por número.
+    """
+    return (c.execute("SELECT COALESCE(MAX(codigo), 0) FROM productos").fetchone()[0]) + 1
+
+
+def _verificar_codigo_libre(c, codigo, excepto_id=None):
+    """Levanta DBError si otro producto ya tiene ese número de item.
+
+    El índice único de la base es la garantía real (ver
+    `_indice_unico_de_codigo()`); esto existe para que el mensaje diga
+    CUÁL producto lo está usando en vez de un error de SQLite -- y para
+    que nombre a los inactivos, que no se ven en la lista y son el caso
+    en que "ese número está libre" parece obvio y no lo es.
+    """
+    sql = "SELECT nombre, activo FROM productos WHERE codigo=?"
+    params = [codigo]
+    if excepto_id is not None:
+        sql += " AND id<>?"
+        params.append(excepto_id)
+    fila = c.execute(sql, params).fetchone()
+    if fila:
+        detalle = f"'{fila[0]}'" + ("" if fila[1] else " (dado de baja)")
+        raise CodigoEnUso(f"El número de item {codigo} ya lo tiene {detalle}. "
+                          "Poné otro número.")
+
+
+@_safe
+def proximo_codigo():
+    """El siguiente número de item libre, para precargar el diálogo de alta."""
+    with _conn() as c:
+        return _proximo_codigo(c)
+
 
 @_safe
 def get_productos(solo_activos=True):
@@ -417,7 +523,7 @@ def get_productos(solo_activos=True):
         c.row_factory = sqlite3.Row
         filtro = "WHERE p.activo=1" if solo_activos else ""
         sql = f"""
-            SELECT p.id, p.nombre, p.precio, p.costo, p.activo,
+            SELECT p.id, p.codigo, p.nombre, p.precio, p.costo, p.activo,
                    COALESCE(SUM(l.stock), 0) AS stock
             FROM productos p
             LEFT JOIN lotes l ON l.producto_id = p.id AND l.stock > 0
@@ -429,11 +535,17 @@ def get_productos(solo_activos=True):
 
 
 @_safe
-def add_producto(nombre, precio, stock, costo=0):
+def add_producto(nombre, precio, stock, costo=0, codigo=None):
+    """`codigo` es el número de item que se ve y se busca en Productos.
+    En None se asigna solo el siguiente libre -- así dar de alta un
+    producto no obliga a inventar un número si no interesa."""
     with _conn() as c:
+        if codigo is None:
+            codigo = _proximo_codigo(c)
+        _verificar_codigo_libre(c, codigo)
         cur = c.execute(
-            "INSERT INTO productos (nombre, precio, costo) VALUES (?, ?, ?)",
-            (nombre, precio, costo),
+            "INSERT INTO productos (nombre, precio, costo, codigo) VALUES (?, ?, ?, ?)",
+            (nombre, precio, costo, codigo),
         )
         # El stock inicial es la primera hornada del producto -- se asume
         # recién horneada, mismo criterio que agregar_lote() para cualquier
@@ -447,10 +559,19 @@ def add_producto(nombre, precio, stock, costo=0):
 
 
 @_safe
-def update_producto(id, nombre, precio, costo):
+def update_producto(id, nombre, precio, costo, codigo=None):
+    """`codigo` en None deja el número de item como está (no lo borra):
+    quien edite solo el precio no tiene por qué mandar el número."""
     with _conn() as c:
-        c.execute("UPDATE productos SET nombre=?, precio=?, costo=? WHERE id=?",
-                  (nombre, precio, costo, id))
+        if codigo is None:
+            c.execute("UPDATE productos SET nombre=?, precio=?, costo=? WHERE id=?",
+                      (nombre, precio, costo, id))
+        else:
+            # `excepto_id` es el propio producto: guardar sin cambiarle el
+            # número no puede fallar por "ya está en uso" contra sí mismo.
+            _verificar_codigo_libre(c, codigo, excepto_id=id)
+            c.execute("UPDATE productos SET nombre=?, precio=?, costo=?, codigo=? WHERE id=?",
+                      (nombre, precio, costo, codigo, id))
         c.commit()
 
 

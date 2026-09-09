@@ -512,6 +512,12 @@ p("Tu catálogo: qué vendes, a qué precio y cuánto tienes. Se toca poco, "
   "normalmente al empezar la semana o cuando sacas algo del horno.", espacio=6)
 vineta("El botón “+ Agregar producto” da de alta algo nuevo (nombre y precio; "
        "el costo es opcional).")
+vineta("Cada producto tiene su “N° de item”, el número de la primera columna. Te sirve "
+       "para buscarlo escribiendo el número en vez del nombre, y para ordenar la lista por "
+       "él. Cuando das de alta un producto ya viene puesto el siguiente que está libre: si "
+       "no te importa el número, déjalo como viene. Si prefieres tu propia numeración, "
+       "cámbialo — lo único que no te deja es ponerle a dos productos el mismo número, y si "
+       "pasa te dice cuál lo está usando (aunque sea uno que diste de baja).")
 vineta("Cada renglón tiene un botón “+ Tanda”: es el que usas cuando sacas pan del "
        "horno. Le pones cuántas piezas y de qué día son.")
 vineta("El botón “⋯” de cada renglón abre las opciones de editar o eliminar. "

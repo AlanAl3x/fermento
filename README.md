@@ -55,7 +55,7 @@ python main.py
 Otros comandos:
 
 ```bash
-python -m unittest test_dinero    # 36 pruebas de las cuentas
+python -m unittest test_dinero    # 48 pruebas de las cuentas
 python empaquetar.py              # arma el ZIP distribuible en dist/
 python generar_manual.py          # regenera el manual (.docx)
 ```
