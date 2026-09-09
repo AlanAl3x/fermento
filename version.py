@@ -14,4 +14,4 @@ Al publicar una versión nueva: subir este número ANTES de empaquetar
 y lo que la app dice en pantalla no pueden quedar desincronizados).
 """
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
