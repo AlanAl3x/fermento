@@ -46,7 +46,7 @@ class NuevaVentaFrame(ctk.CTkFrame):
         self._filtro_var = ctk.StringVar()
         self._filtro_var.trace_add("write", lambda *a: self.refresh())
         ctk.CTkEntry(izq, textvariable=self._filtro_var,
-                     placeholder_text="Buscar producto...",
+                     placeholder_text="Buscar por nombre o N°...",
                      fg_color=theme.BG_INPUT, text_color=theme.TEXT_PRIMARY,
                      border_color=theme.BORDER).grid(
             row=1, column=0, sticky="ew", padx=10, pady=(0, 6))
@@ -160,7 +160,13 @@ class NuevaVentaFrame(ctk.CTkFrame):
 
         filtro = self._filtro_var.get().strip().lower()
         if filtro:
-            productos = [p for p in productos if filtro in p["nombre"].lower()]
+            # Mismo criterio que la lista de Productos (nombre por contenido,
+            # N° de item por principio), compartido a propósito en
+            # `formato.coincide_busqueda()`: acá se busca con gente esperando
+            # y lo último que puede pasar es que el número que se usa todos
+            # los días filtre distinto según la pantalla.
+            productos = [p for p in productos
+                         if formato.coincide_busqueda(p, filtro)]
         if not productos:
             ctk.CTkLabel(self.panel_productos,
                          text="No hay productos que coincidan con la búsqueda.",
@@ -188,10 +194,20 @@ class NuevaVentaFrame(ctk.CTkFrame):
     def _tarjeta_producto(self, p, lotes, reglas, reglas_prod):
         card = ctk.CTkFrame(self.panel_productos, fg_color=theme.BG_CARD, corner_radius=6)
         card.pack(fill="x", pady=2)
-        ctk.CTkLabel(card, text=p["nombre"], anchor="w",
+        # El N° de item va delante del nombre y en chico: no es lo que se
+        # lee de un vistazo (eso sigue siendo el nombre), pero es lo que
+        # confirma que el número tipeado en el buscador cayó donde se
+        # quería antes de apretar "+ Agregar". Si falta (base sin migrar),
+        # no se dibuja nada -- un guion ahí sería ruido en cada tarjeta.
+        encabezado = ctk.CTkFrame(card, fg_color="transparent")
+        encabezado.pack(fill="x", padx=10, pady=(8, 2))
+        if p["codigo"] is not None:
+            ctk.CTkLabel(encabezado, text=str(p["codigo"]),
+                         text_color=theme.TEXT_SECONDARY if lotes else theme.TEXT_DISABLED,
+                         font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(encabezado, text=p["nombre"], anchor="w",
                      text_color=theme.TEXT_PRIMARY if lotes else theme.TEXT_DISABLED,
-                     font=ctk.CTkFont(weight="bold")).pack(
-            anchor="w", padx=10, pady=(8, 2))
+                     font=ctk.CTkFont(weight="bold")).pack(side="left")
 
         if not lotes:
             ctk.CTkLabel(card, text="Sin stock", text_color=theme.TEXT_DISABLED,

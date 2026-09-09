@@ -123,15 +123,12 @@ class ProductosFrame(ctk.CTkFrame):
 
         filtro = self._filtro_var.get().strip().lower()
         if filtro:
-            # El número matchea por PREFIJO y el nombre por contenido, que es
-            # como se usa cada uno: tipear "10" busca la familia 10, 101,
-            # 102… mientras que en el nombre lo natural es encontrar "choco"
-            # dentro de "Concha de chocolate". Buscar el número como
-            # subcadena traería el 210 al escribir "10", que no es lo que
-            # espera nadie parado en el mostrador.
+            # Nombre por contenido, N° de item por principio: el criterio
+            # está en `formato.coincide_busqueda()` porque Nueva Venta busca
+            # con el mismo, y buscar distinto en cada pantalla confunde más
+            # que no poder buscar.
             productos = [p for p in productos
-                         if filtro in p["nombre"].lower()
-                         or str(p["codigo"] or "").startswith(filtro)]
+                         if formato.coincide_busqueda(p, filtro)]
 
         claves = {
             # Sin número (solo posible si la migración no llegó a correr):

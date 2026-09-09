@@ -485,7 +485,10 @@ doc.add_heading("Nueva venta", level=2)
 p("Es la pantalla donde vendes, y con la que vas a pasar el 90 % del día. "
   "La aplicación abre directamente aquí.", espacio=6)
 vineta("Del lado izquierdo están todos tus productos. Arriba hay un buscador para "
-       "encontrarlos rápido si tienes muchos.")
+       "encontrarlos rápido si tienes muchos: escribe parte del nombre, o el N° de "
+       "item si te lo sabes de memoria. El número de cada producto aparece chiquito "
+       "delante de su nombre, para que confirmes de un vistazo que buscaste el que "
+       "querías antes de agregarlo.")
 vineta("Cada producto tiene un botón “+ Agregar” por cada tanda disponible. Si tienes "
        "pan de hoy y pan de ayer, verás dos botones, cada uno con su precio y su "
        "antigüedad: así vendes del que corresponda sin equivocarte de precio.")

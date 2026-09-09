@@ -59,3 +59,24 @@ def edad_tanda(dias):
     if dias == 1:
         return "Tanda anterior"
     return f"hace {dias} días"
+
+def coincide_busqueda(producto, filtro):
+    """¿Este producto entra en lo que se escribió en el buscador?
+
+    Criterio Único de las dos pantallas que listan productos -- Productos y
+    Nueva Venta. Vivió escrito dos veces por un rato y alcanza con que se
+    toque una para que buscar lo mismo dé distinto según dónde se esté
+    parado, que es el peor resultado posible para alguien atendiendo.
+
+    El nombre se busca por CONTENIDO y el N° de item por PRINCIPIO, que es
+    como se usa cada uno: en el nombre lo natural es encontrar “choco”
+    dentro de “Concha de chocolate”, mientras que los números se leen de
+    izquierda a derecha -- tipear “10” trae el 10, el 101 y el 102, pero
+    no el 210, que no espera nadie parado en el mostrador.
+
+    `filtro` llega en minúsculas y sin espacios en los bordes (lo hace el
+    llamador, que ya tenía que normalizarlo para su propio `if`).
+    """
+    return (filtro in producto["nombre"].lower()
+            or str(producto["codigo"] or "").startswith(filtro))
+
